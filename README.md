@@ -1,3 +1,5 @@
+<img src="public/banner.png" alt="Academic Agent Toolkit Banner" style="border-radius: 15px;">
+
 # Academic Agent Toolkit (AAT)
 
 **One command to install academic research skills and paper search across all your AI coding agents.**
