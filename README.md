@@ -18,31 +18,32 @@ All configured across every supported agent in one command. No manual JSON/TOML 
 
 ---
 
-## Quick Start
+## Installation
 
 **Prerequisites:** Python 3.11+, [uv](https://docs.astral.sh/uv/getting-started/installation/).
 
+Pick one:
+
 ```bash
-# See what agents are detected and what's missing
+# No install — run directly (always latest from PyPI)
 uvx academic-agent-toolkit doctor
 
-# Install everything (skills + MCP) with one guided command
-uvx academic-agent-toolkit install
+# Persistent install (stays in your PATH)
+uv tool install academic-agent-toolkit
+aat doctor
 
-# Configure your API keys interactively
-uvx academic-agent-toolkit setup-keys
-
-# Verify the installation
-uvx academic-agent-toolkit verify
+# Standard pip
+pip install academic-agent-toolkit
+aat doctor
 ```
 
-The shorthand `aat` works everywhere:
+## Quick Start
 
 ```bash
-uvx aat doctor
-uvx aat install
-uvx aat setup-keys
-uvx aat verify
+aat doctor      # See what agents are detected
+aat install     # Install everything (skills + MCP)
+aat setup-keys  # Configure API keys interactively
+aat verify      # Confirm everything works
 ```
 
 ---
