@@ -16,8 +16,8 @@ console = Console()
 def show_banner() -> None:
     console.print(
         Panel.fit(
-            f"[bold cyan]{BANNER}[/bold cyan]\n\n[bold white]{APP_NAME}[/bold white]",
-            border_style="bright_blue",
+            f"[bold white]{BANNER}[/bold white]\n\n[bold white]{APP_NAME}[/bold white]",
+            border_style="white",
             box=box.DOUBLE,
             padding=(1, 2),
         )

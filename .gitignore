@@ -5,3 +5,5 @@ __pycache__/
 *.bak
 *.backup
 .venv/
+
+.atl
