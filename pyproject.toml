@@ -1,0 +1,53 @@
+[build-system]
+requires = ["hatchling>=1.25.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "academic-agent-toolkit"
+version = "0.1.0"
+description = "Plug-and-play CLI for academic research agent skills and Paper Search MCP setup"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+authors = [
+  { name = "Academic Agent Toolkit contributors" },
+]
+keywords = [
+  "academic-research",
+  "mcp",
+  "cli",
+  "literature-review",
+  "paper-search",
+  "claude-code",
+  "opencode",
+  "cursor",
+  "copilot",
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Scientific/Engineering",
+  "Topic :: Utilities",
+]
+dependencies = [
+  "rich>=13.7,<14",
+  "typer>=0.21.1,<0.22",
+]
+
+[project.urls]
+Homepage = "https://github.com/openags/paper-search-mcp"
+Repository = "https://github.com/openags/paper-search-mcp"
+
+[project.scripts]
+academic-agent-toolkit = "academic_agent_toolkit.cli:main"
+aat = "academic_agent_toolkit.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/academic_agent_toolkit"]
