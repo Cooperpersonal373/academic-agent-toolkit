@@ -42,8 +42,8 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/openags/paper-search-mcp"
-Repository = "https://github.com/openags/paper-search-mcp"
+Homepage = "https://github.com/JhonHander/academic-agent-toolkit"
+Repository = "https://github.com/JhonHander/academic-agent-toolkit"
 
 [project.scripts]
 academic-agent-toolkit = "academic_agent_toolkit.cli:main"
