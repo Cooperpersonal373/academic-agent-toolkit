@@ -52,9 +52,11 @@ aat verify      # Confirm everything works
 
 ## How it works
 
-**New users** — `aat install` downloads Academic Research Suite and Experiment Agent automatically, creates a private `.env` file for your API keys, and configures Paper Search MCP in every detected agent.
+**New users** — `aat install` downloads Academic Research Suite and Experiment Agent automatically, creates a private `.env` file for your API keys, installs one canonical skill in `~/.agents/skills/academic-research-suite`, and configures Paper Search MCP in every detected agent.
 
 **Existing users** — AAT adopts your existing ARS installation and Paper Search MCP registrations. It skips what you already have and only manages what's missing. Use `--replace-skills` or `--replace-mcp` if you want AAT to take over an existing setup.
+
+The `.agents/` layout is the source of truth. Agents with native skill directories get symlinks to the canonical `.agents` skill instead of duplicated copies.
 
 ---
 
@@ -68,6 +70,7 @@ aat verify      # Confirm everything works
 | `aat verify` | Confirm everything is in place |
 | `aat self-check` | Validate runtime prerequisites (Python, uv, ARS source, env file) |
 | `aat repair` | Re-apply the last saved installation |
+| `aat update` | Check PyPI, upgrade AAT, then re-apply the saved installation |
 | `aat uninstall` | Remove AAT-managed files safely (does not touch your own configs) |
 
 ---
@@ -95,11 +98,14 @@ Keys are stored in a single private file (`~/.config/paper-search-mcp/.env` by d
 
 **Skill adapters** (agent-optimized routers for Academic Research Suite):
 
+- Zed (`~/.agents/skills/` native global skill)
 - Claude Code
 - OpenCode
 - Cursor
-- GitHub Copilot
-- Codex (opt-in with `--include-codex`)
+- GitHub Copilot (`~/.agents/skills/` and `~/.copilot/skills/` global skills)
+- Codex
+
+GitHub Copilot loads skills from `~/.agents/skills/` and `~/.copilot/skills/` globally, and from `.github/skills/`, `.claude/skills/`, and `.agents/skills/` per project. AAT already installs the canonical skill to `~/.agents/skills/` and symlinks to `~/.copilot/skills/`, so Copilot picks it up automatically. VS Code does not expose a global skills directory — it is configured for MCP only.
 
 **MCP configuration** (Paper Search MCP registration):
 
@@ -124,7 +130,6 @@ See `docs/mcp-agent-matrix.md` for the exact config format used per agent.
 | `--env-file PATH` | Use a custom `.env` file path |
 | `--replace-skills` | Back up and replace existing skill directories |
 | `--replace-mcp` | Back up and replace existing MCP entries |
-| `--include-codex` | Also install the Codex skill adapter |
 | `--dry-run --yes` | Preview the full plan without writing files |
 
 ---
@@ -147,9 +152,11 @@ Removes only files AAT created. Your existing hand-written configs and skill dir
 | What | Location |
 |---|---|
 | AAT config | `~/.config/academic-agent-toolkit/config.json` |
+| Canonical global skill | `~/.agents/skills/academic-research-suite/` |
+| Zed global agent instructions block | `~/.agents/AGENTS.md` |
 | Managed ARS source | `~/.local/share/academic-agent-toolkit/ars/` |
 | Paper Search MCP env | `~/.config/paper-search-mcp/.env` (default) |
-| Skill adapters | `~/.claude/skills/`, `~/.config/opencode/skills/`, `~/.cursor/skills/`, `~/.copilot/skills/` |
+| Skill symlinks | `~/.claude/skills/`, `~/.config/opencode/skills/`, `~/.cursor/skills/`, `~/.codex/skills/` |
 
 ---
 

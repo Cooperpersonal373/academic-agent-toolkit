@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "academic-agent-toolkit"
-version = "0.1.1"
+version = "0.1.2"
 description = "Plug-and-play CLI for academic research agent skills and Paper Search MCP setup"
 readme = "README.md"
 license = { text = "MIT" }
@@ -37,6 +37,7 @@ classifiers = [
   "Topic :: Utilities",
 ]
 dependencies = [
+  "questionary>=2.1.1",
   "rich>=13.7,<14",
   "typer>=0.21.1,<0.22",
 ]

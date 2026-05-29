@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -18,6 +19,12 @@ from academic_agent_toolkit.config import DATA_DIR, DEFAULT_ENV_FILE, ToolkitCon
 
 SERVER_NAME = "paper-search-mcp"
 MCP_COMMAND = ["uv", "run", "--with", "paper-search-mcp", "python", "-m", "paper_search_mcp.server"]
+AGENTS_ROOT = Path.home() / ".agents"
+AGENTS_GLOBAL_FILE = AGENTS_ROOT / "AGENTS.md"
+CANONICAL_SKILL_DIR = AGENTS_ROOT / "skills" / "academic-research-suite"
+CANONICAL_ARS_LINK = CANONICAL_SKILL_DIR / "ars"
+CLAUDE_MCP_DIR = Path.home() / ".claude" / "mcp"
+CLAUDE_MCP_PATH = CLAUDE_MCP_DIR / f"{SERVER_NAME}.json"
 ARS_REPO_URL = "https://github.com/Imbad0202/academic-research-skills"
 ARS_REF = "v3.9.4.2"
 ARS_ARCHIVE_URL = f"{ARS_REPO_URL}/archive/refs/tags/{ARS_REF}.zip"
@@ -42,6 +49,7 @@ SKILL_TARGETS = {
     "cursor": Path.home() / ".cursor" / "skills" / "academic-research-suite",
     "copilot": Path.home() / ".copilot" / "skills" / "academic-research-suite",
     "codex": Path.home() / ".codex" / "skills" / "academic-research-suite",
+    "zed": CANONICAL_SKILL_DIR,
 }
 
 JSON_TARGETS = {
@@ -65,6 +73,7 @@ DISCOVERY_HINTS = {
 }
 
 ARS_SOURCE_CANDIDATES = [
+    CANONICAL_ARS_LINK,
     DATA_DIR / "ars" / MANAGED_ARS_VERSION / "source",
     Path.home() / ".codex" / "skills" / "academic-research-suite" / "ars",
     Path.home() / ".claude" / "skills" / "academic-research-suite" / "ars",
@@ -73,21 +82,21 @@ ARS_SOURCE_CANDIDATES = [
     Path.home() / ".copilot" / "skills" / "academic-research-suite" / "ars",
 ]
 
-SKILL_TEMPLATES = {
-    "codex": """---
+UNIVERSAL_SKILL_TEMPLATE = """---
 name: academic-research-suite
 description: >
-  Codex adapter for academic research workflows: deep research, literature
-  review, systematic review, manuscript drafting, paper review, citation checks,
-  research-to-paper pipelines, and experiment planning. Use for ARS aliases such
-  as ars-plan, ars-outline, ars-lit-review, ars-revision, and ars-full.
+  Academic research workflows: deep research, literature review, systematic
+  review, manuscript drafting, paper review, citation checks, research-to-paper
+  pipelines, and experiment planning. Use for research tasks, paper workflows,
+  ARS aliases, and experiment design.
 metadata:
-  adapter_runtime: codex
+  adapter_runtime: universal
+  managed_by: academic-agent-toolkit
 ---
 
-# Academic Research Suite for Codex
+# Academic Research Suite
 
-Use this file as the router. Do not load the full suite by default. Read one workflow entrypoint from `ars/`, then load only the files needed for the current phase.
+Use this skill as a router. Do not load the full suite by default. Read one workflow entrypoint from `ars/`, then load only the files needed for the current phase.
 
 | Intent | Read first |
 |---|---|
@@ -101,114 +110,23 @@ If the user has only a broad paper topic or tentative title without a clear rese
 
 Alias routing: treat `/ars-*` and `ars-*` command names as prompt recipes under `ars/commands/`, then route to the matching workflow. If slash-prefixed input is reserved by the client, tell the user to use the plain alias form.
 
-Codex runtime mapping: upstream Claude Code agents are role prompts to execute inline unless the user explicitly asks for delegation or parallel agents.
-""",
-    "claude": """---
-name: academic-research-suite
-description: >
-  Claude adapter for academic research workflows: deep research, literature
-  review, systematic review, manuscript drafting, paper review, citation checks,
-  research-to-paper pipelines, and experiment planning.
-metadata:
-  adapter_runtime: claude
----
+Runtime mapping: upstream ARS agent/team references are role prompts to execute inline unless the current client has native subagent delegation and the user explicitly asks for delegation or parallel agents. Use Paper Search MCP for current literature retrieval, DOI/PDF checks, and source verification.
+"""
 
-# Academic Research Suite for Claude Code
+SKILL_TEMPLATES = {agent: UNIVERSAL_SKILL_TEMPLATE for agent in SKILL_TARGETS}
 
-Use this file as the router. Do not load the full suite by default. Read one workflow entrypoint from `ars/`, then load only the files needed for the current phase.
+GLOBAL_AGENTS_TEMPLATE = f"""<!-- BEGIN academic-agent-toolkit -->
+# Academic Agent Toolkit
 
-| Intent | Read first |
-|---|---|
-| Deep research, literature review, systematic review, meta-analysis, fact checking, research question refinement | `ars/deep-research/WORKFLOW.md` or `ars/deep-research/SKILL.md` |
-| Paper writing, outline, abstract, revision, citation formatting, AI disclosure, format guidance | `ars/academic-paper/WORKFLOW.md` or `ars/academic-paper/SKILL.md` |
-| Peer review simulation, editorial decision, review calibration | `ars/academic-paper-reviewer/WORKFLOW.md` or `ars/academic-paper-reviewer/SKILL.md` |
-| End-to-end research-to-paper workflow | `ars/academic-pipeline/WORKFLOW.md` or `ars/academic-pipeline/SKILL.md` |
-| Experiment planning, study protocol, statistical interpretation, reproducibility validation | `ars/experiment-agent/WORKFLOW.md` or `ars/experiment-agent/SKILL.md` |
+Academic Research Suite is installed globally at `{CANONICAL_SKILL_DIR}`.
 
-If the user has only a broad paper topic or tentative title without a clear research question, route to the `ars/deep-research` entrypoint in Socratic mode first and ask 3-5 narrowing questions.
+When the user asks for academic research, literature review, systematic review, manuscript drafting, peer review, citation checking, research-to-paper pipelines, or experiment planning, use the `academic-research-suite` skill if your runtime supports skills.
 
-Claude runtime mapping: use native Claude Code skills, native slash commands where available, and MCP paper search for current literature checks.
-""",
-    "opencode": """---
-name: academic-research-suite
-description: >
-  OpenCode adapter for academic research workflows: deep research, literature
-  review, systematic review, manuscript drafting, paper review, citation checks,
-  research-to-paper pipelines, and experiment planning. Use for ARS aliases such
-  as ars-plan, ars-outline, ars-lit-review, ars-revision, and ars-full.
-metadata:
-  adapter_runtime: opencode
----
+If your runtime does not support skills, read `{CANONICAL_SKILL_DIR / 'SKILL.md'}` as the router and load only the required workflow files under `{CANONICAL_ARS_LINK}`.
 
-# Academic Research Suite for OpenCode
-
-Use this file as the router. Do not load the full suite by default. Read one workflow entrypoint from `ars/`, then load only the files needed for the current phase.
-
-| Intent | Read first |
-|---|---|
-| Deep research, literature review, systematic review, meta-analysis, fact checking, research question refinement | `ars/deep-research/WORKFLOW.md` or `ars/deep-research/SKILL.md` |
-| Paper writing, outline, abstract, revision, citation formatting, AI disclosure, format guidance | `ars/academic-paper/WORKFLOW.md` or `ars/academic-paper/SKILL.md` |
-| Peer review simulation, editorial decision, review calibration | `ars/academic-paper-reviewer/WORKFLOW.md` or `ars/academic-paper-reviewer/SKILL.md` |
-| End-to-end research-to-paper workflow | `ars/academic-pipeline/WORKFLOW.md` or `ars/academic-pipeline/SKILL.md` |
-| Experiment planning, study protocol, statistical interpretation, reproducibility validation | `ars/experiment-agent/WORKFLOW.md` or `ars/experiment-agent/SKILL.md` |
-
-If the user has only a broad paper topic or tentative title without a clear research question, route to the `ars/deep-research` entrypoint in Socratic mode first and ask 3-5 narrowing questions.
-
-OpenCode runtime mapping: upstream ARS agent/team references are role prompts unless the user explicitly requests subagent delegation. Use MCP paper search for current literature and source verification.
-""",
-    "cursor": """---
-name: academic-research-suite
-description: >
-  Cursor adapter for academic research workflows: deep research, literature
-  review, systematic review, manuscript drafting, paper review, citation checks,
-  research-to-paper pipelines, and experiment planning.
-metadata:
-  adapter_runtime: cursor
----
-
-# Academic Research Suite for Cursor
-
-Use this file as the router. Do not load the full suite by default. Read one workflow entrypoint from `ars/`, then load only the files needed for the current phase.
-
-| Intent | Read first |
-|---|---|
-| Deep research, literature review, systematic review, meta-analysis, fact checking, research question refinement | `ars/deep-research/WORKFLOW.md` or `ars/deep-research/SKILL.md` |
-| Paper writing, outline, abstract, revision, citation formatting, AI disclosure, format guidance | `ars/academic-paper/WORKFLOW.md` or `ars/academic-paper/SKILL.md` |
-| Peer review simulation, editorial decision, review calibration | `ars/academic-paper-reviewer/WORKFLOW.md` or `ars/academic-paper-reviewer/SKILL.md` |
-| End-to-end research-to-paper workflow | `ars/academic-pipeline/WORKFLOW.md` or `ars/academic-pipeline/SKILL.md` |
-| Experiment planning, study protocol, statistical interpretation, reproducibility validation | `ars/experiment-agent/WORKFLOW.md` or `ars/experiment-agent/SKILL.md` |
-
-If the user has only a broad paper topic or tentative title without a clear research question, route to the `ars/deep-research` entrypoint in Socratic mode first and ask 3-5 narrowing questions.
-
-Cursor runtime mapping: use the skill as a lightweight router and rely on MCP paper search for current literature retrieval and checking.
-""",
-    "copilot": """---
-name: academic-research-suite
-description: >
-  Copilot adapter for academic research workflows: deep research, literature
-  review, systematic review, manuscript drafting, paper review, citation checks,
-  research-to-paper pipelines, and experiment planning.
-metadata:
-  adapter_runtime: copilot
----
-
-# Academic Research Suite for GitHub Copilot
-
-Use this file as the router. Do not load the full suite by default. Read one workflow entrypoint from `ars/`, then load only the files needed for the current phase.
-
-| Intent | Read first |
-|---|---|
-| Deep research, literature review, systematic review, meta-analysis, fact checking, research question refinement | `ars/deep-research/WORKFLOW.md` or `ars/deep-research/SKILL.md` |
-| Paper writing, outline, abstract, revision, citation formatting, AI disclosure, format guidance | `ars/academic-paper/WORKFLOW.md` or `ars/academic-paper/SKILL.md` |
-| Peer review simulation, editorial decision, review calibration | `ars/academic-paper-reviewer/WORKFLOW.md` or `ars/academic-paper-reviewer/SKILL.md` |
-| End-to-end research-to-paper workflow | `ars/academic-pipeline/WORKFLOW.md` or `ars/academic-pipeline/SKILL.md` |
-| Experiment planning, study protocol, statistical interpretation, reproducibility validation | `ars/experiment-agent/WORKFLOW.md` or `ars/experiment-agent/SKILL.md` |
-
-If the user has only a broad paper topic or tentative title without a clear research question, route to the `ars/deep-research` entrypoint in Socratic mode first and ask 3-5 narrowing questions.
-
-Copilot runtime mapping: treat the skill as routing context and use MCP paper search for fresh citations and validation.
-""",
-}
+Use Paper Search MCP (`{SERVER_NAME}`) for current literature retrieval, DOI/PDF checks, and source verification.
+<!-- END academic-agent-toolkit -->
+"""
 
 
 @dataclass
@@ -405,19 +323,19 @@ def resolve_ars_source(
 
 def detect_agents() -> list[AgentStatus]:
     return [
-        AgentStatus("claude", DISCOVERY_HINTS["claude"].exists(), True, True, "Claude Code skills + CLI-managed MCP"),
-        AgentStatus("opencode", DISCOVERY_HINTS["opencode"].exists(), True, True, "OpenCode skills + opencode.json MCP"),
-        AgentStatus("cursor", DISCOVERY_HINTS["cursor"].exists(), True, True, "Cursor skills + mcp.json MCP"),
-        AgentStatus("copilot", DISCOVERY_HINTS["copilot"].exists(), True, True, "Copilot skills + mcp-config MCP"),
-        AgentStatus("codex", DISCOVERY_HINTS["codex"].exists(), True, True, "Codex skill install is optional and cautious"),
+        AgentStatus("claude", DISCOVERY_HINTS["claude"].exists(), True, True, "symlinked global .agents skill + Claude MCP"),
+        AgentStatus("opencode", DISCOVERY_HINTS["opencode"].exists(), True, True, "symlinked global .agents skill + opencode.json MCP"),
+        AgentStatus("cursor", DISCOVERY_HINTS["cursor"].exists(), True, True, "symlinked global .agents skill + mcp.json MCP"),
+        AgentStatus("copilot", DISCOVERY_HINTS["copilot"].exists(), True, True, "symlinked global .agents skill + mcp-config MCP; also loads ~/.agents/skills natively"),
+        AgentStatus("codex", DISCOVERY_HINTS["codex"].exists(), True, True, "symlinked global .agents skill + Codex MCP"),
         AgentStatus("vscode-user", DISCOVERY_HINTS["vscode-user"].exists(), False, True, "VS Code MCP only"),
         AgentStatus("vscode-global", DISCOVERY_HINTS["vscode-global"].exists(), False, True, "VS Code MCP only"),
-        AgentStatus("zed", DISCOVERY_HINTS["zed"].exists(), False, True, "Zed MCP only; no native skills dir"),
+        AgentStatus("zed", DISCOVERY_HINTS["zed"].exists(), True, True, "native global skills from ~/.agents/skills + Zed MCP"),
     ]
 
 
 def default_skill_agents() -> list[str]:
-    return [status.name for status in detect_agents() if status.detected and status.skill_supported and status.name != "codex"]
+    return [status.name for status in detect_agents() if status.detected and status.skill_supported]
 
 
 def default_mcp_agents() -> list[str]:
@@ -459,7 +377,7 @@ def json_server(agent: str, env_file: Path) -> dict:
     if agent == "copilot":
         return {"type": "local", "command": MCP_COMMAND[0], "args": MCP_COMMAND[1:], "env": env}
     if agent == "zed":
-        return {"command": MCP_COMMAND[0], "args": MCP_COMMAND[1:], "env": env}
+        return {"source": "custom", "enabled": True, "command": MCP_COMMAND[0], "args": MCP_COMMAND[1:], "env": env}
     return {"command": MCP_COMMAND[0], "args": MCP_COMMAND[1:], "env": env}
 
 
@@ -479,38 +397,109 @@ def write_json(path: Path, data: dict) -> None:
     path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
 
+def strip_jsonc(text: str) -> str:
+    text = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
+    lines: list[str] = []
+    for line in text.splitlines():
+        in_string = False
+        escaped = False
+        cut = len(line)
+        for index, char in enumerate(line):
+            if escaped:
+                escaped = False
+                continue
+            if char == "\\" and in_string:
+                escaped = True
+                continue
+            if char == '"':
+                in_string = not in_string
+                continue
+            if not in_string and line[index : index + 2] == "//":
+                cut = index
+                break
+        lines.append(line[:cut])
+    return re.sub(r",\s*([}\]])", r"\1", "\n".join(lines))
+
+
+def load_json_or_jsonc(path: Path) -> dict:
+    if not path.exists():
+        return {}
+    text = path.read_text(encoding="utf-8")
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return json.loads(strip_jsonc(text))
+
+
+def ensure_agents_home(ars_source: Path, dry_run: bool, replace: bool) -> str:
+    desired_skill = UNIVERSAL_SKILL_TEMPLATE.strip() + "\n"
+    desired_agents = GLOBAL_AGENTS_TEMPLATE.strip() + "\n"
+    if dry_run:
+        return f"would create global skill at {CANONICAL_SKILL_DIR}"
+    if CANONICAL_SKILL_DIR.exists() and not is_canonical_skill_ready()[0]:
+        if not replace:
+            raise RuntimeError(
+                f"Existing non-managed skill found at {CANONICAL_SKILL_DIR}. Rerun with --replace-skills to back it up and replace it."
+            )
+        backup_target = CANONICAL_SKILL_DIR.with_name(
+            f"{CANONICAL_SKILL_DIR.name}.backup-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        )
+        CANONICAL_SKILL_DIR.rename(backup_target)
+    CANONICAL_SKILL_DIR.mkdir(parents=True, exist_ok=True)
+    (CANONICAL_SKILL_DIR / "SKILL.md").write_text(desired_skill, encoding="utf-8")
+    if CANONICAL_ARS_LINK.exists() or CANONICAL_ARS_LINK.is_symlink():
+        CANONICAL_ARS_LINK.unlink()
+    CANONICAL_ARS_LINK.symlink_to(ars_source, target_is_directory=True)
+    AGENTS_GLOBAL_FILE.parent.mkdir(parents=True, exist_ok=True)
+    current_agents = AGENTS_GLOBAL_FILE.read_text(encoding="utf-8") if AGENTS_GLOBAL_FILE.exists() else ""
+    begin = "<!-- BEGIN academic-agent-toolkit -->"
+    end = "<!-- END academic-agent-toolkit -->"
+    if begin in current_agents and end in current_agents:
+        before, rest = current_agents.split(begin, 1)
+        _, after = rest.split(end, 1)
+        next_agents = before.rstrip() + "\n\n" + desired_agents + after.lstrip("\n")
+    else:
+        next_agents = current_agents.rstrip() + "\n\n" + desired_agents if current_agents.strip() else desired_agents
+    AGENTS_GLOBAL_FILE.write_text(next_agents, encoding="utf-8")
+    return f"installed global .agents skill at {CANONICAL_SKILL_DIR}"
+
+
+def is_canonical_skill_ready(ars_source: Path | None = None) -> tuple[bool, str]:
+    skill_file = CANONICAL_SKILL_DIR / "SKILL.md"
+    if not skill_file.exists() or not CANONICAL_ARS_LINK.is_symlink():
+        return False, "missing ~/.agents skill, SKILL.md, or ars symlink"
+    expected = UNIVERSAL_SKILL_TEMPLATE.strip() + "\n"
+    if skill_file.read_text(encoding="utf-8") != expected:
+        return False, "global .agents skill is not AAT-managed"
+    if ars_source and CANONICAL_ARS_LINK.resolve() != ars_source:
+        return False, f"global ars symlink points to {CANONICAL_ARS_LINK.resolve()} instead of {ars_source}"
+    return True, "global .agents skill installed"
+
+
 def install_skill(agent: str, ars_source: Path, replace: bool, dry_run: bool) -> str:
     target = SKILL_TARGETS[agent]
-    if agent == "codex" and str(ars_source).startswith(str(target.resolve())):
+    if agent == "zed":
+        ok, detail = is_canonical_skill_ready(ars_source)
+        return detail if ok else f"Zed will load the global .agents skill at {CANONICAL_SKILL_DIR}"
+    if agent == "codex" and target.exists() and str(ars_source).startswith(str(target.resolve())):
         raise RuntimeError(
             "Refusing to replace Codex skill because the ARS source lives inside the same Codex target path. Use --ars-source with a separate checkout first."
         )
     if dry_run:
-        return f"would install skill adapter for {agent} at {target}"
+        return f"would symlink {target} to {CANONICAL_SKILL_DIR}"
     target.parent.mkdir(parents=True, exist_ok=True)
-    desired = SKILL_TEMPLATES[agent].strip() + "\n"
     if target.exists() or target.is_symlink():
-        skill_file = target / "SKILL.md"
-        link_file = target / "ars"
-        if (
-            target.is_dir()
-            and skill_file.exists()
-            and skill_file.read_text(encoding="utf-8") == desired
-            and link_file.is_symlink()
-            and link_file.resolve() == ars_source
-        ):
-            return f"skill already installed for {agent}"
-        if not replace:
+        if target.is_symlink() and target.resolve() == CANONICAL_SKILL_DIR:
+            return f"skill symlink already installed for {agent}"
+        if not replace and not is_managed_skill(agent):
             return f"skipped existing skill for {agent}; rerun with --replace-skills"
-        backup_target = target.with_name(f"{target.name}.backup-{datetime.now().strftime('%Y%m%d%H%M%S')}")
-        target.rename(backup_target)
-    target.mkdir(parents=True, exist_ok=True)
-    (target / "SKILL.md").write_text(desired, encoding="utf-8")
-    link = target / "ars"
-    if link.exists() or link.is_symlink():
-        link.unlink()
-    link.symlink_to(ars_source, target_is_directory=True)
-    return f"installed skill adapter for {agent}"
+        if target.is_symlink() or target.is_file():
+            target.unlink()
+        else:
+            backup_target = target.with_name(f"{target.name}.backup-{datetime.now().strftime('%Y%m%d%H%M%S')}")
+            target.rename(backup_target)
+    target.symlink_to(CANONICAL_SKILL_DIR, target_is_directory=True)
+    return f"symlinked skill adapter for {agent} to global .agents skill"
 
 
 def merge_json_config(agent: str, env_file: Path, dry_run: bool, replace: bool) -> str:
@@ -518,11 +507,6 @@ def merge_json_config(agent: str, env_file: Path, dry_run: bool, replace: bool) 
     try:
         data = load_json(path)
     except json.JSONDecodeError as exc:
-        if agent == "zed":
-            text = path.read_text(encoding="utf-8") if path.exists() else ""
-            if SERVER_NAME in text:
-                return "adopted existing zed MCP entry from JSONC settings"
-            return f"skipped zed automatic merge because settings.json is JSONC: {exc}"
         raise RuntimeError(f"Invalid JSON in {path}: {exc}") from exc
     desired = json_server(agent, env_file)
     servers = data.setdefault(top_key, {})
@@ -536,6 +520,153 @@ def merge_json_config(agent: str, env_file: Path, dry_run: bool, replace: bool) 
         backup(path)
     write_json(path, data)
     return f"merged MCP config for {agent}"
+
+
+def find_json_object_span(text: str, key: str) -> tuple[int, int] | None:
+    match = re.search(rf'"{re.escape(key)}"\s*:', text)
+    if not match:
+        return None
+    start = text.find("{", match.end())
+    if start == -1:
+        return None
+    depth = 0
+    in_string = False
+    escaped = False
+    for index in range(start, len(text)):
+        char = text[index]
+        if escaped:
+            escaped = False
+            continue
+        if char == "\\" and in_string:
+            escaped = True
+            continue
+        if char == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return start, index + 1
+    return None
+
+
+def insert_json_object_property(text: str, object_span: tuple[int, int], key: str, value: dict) -> str:
+    start, end = object_span
+    body = text[start + 1 : end - 1]
+    indent_match = re.search(r"\n([ \t]*)\S", body)
+    indent = indent_match.group(1) if indent_match else "    "
+    entry = json.dumps({key: value}, indent=2)[1:-1]
+    entry = "\n".join(indent + line if line.strip() else line for line in entry.splitlines())
+    separator = ",\n" if body.strip() else "\n"
+    return text[: end - 1] + separator + entry + "\n" + text[end - 1 :]
+
+
+def remove_json_object_property(text: str, object_span: tuple[int, int], key: str) -> str | None:
+    start, end = object_span
+    match = re.search(rf'"{re.escape(key)}"\s*:', text[start:end])
+    if not match:
+        return None
+    key_start = start + match.start()
+    value_start = text.find("{", start + match.end())
+    if value_start == -1 or value_start >= end:
+        return None
+    value_span = find_json_object_span(text[key_start:end], key)
+    if value_span is None:
+        return None
+    value_end = key_start + value_span[1]
+    previous_comma = text.rfind(",", start, key_start)
+    previous_newline = text.rfind("\n", start, key_start)
+    if previous_comma > previous_newline:
+        remove_start = previous_comma
+        remove_end = value_end
+    else:
+        remove_start = previous_newline + 1 if previous_newline != -1 else key_start
+        next_comma = text.find(",", value_end, end)
+        remove_end = next_comma + 1 if next_comma != -1 else value_end
+    return text[:remove_start] + text[remove_end:]
+
+
+def merge_zed_config(env_file: Path, dry_run: bool, replace: bool) -> str:
+    path, top_key = JSON_TARGETS["zed"]
+    desired = json_server("zed", env_file)
+    if not path.exists():
+        if dry_run:
+            return f"would merge MCP config for zed into {path}"
+        write_json(path, {top_key: {SERVER_NAME: desired}})
+        return "merged MCP config for zed"
+    text = path.read_text(encoding="utf-8")
+    if SERVER_NAME in text and not replace:
+        return "adopted existing MCP config for zed; rerun with --replace-mcp to manage it"
+    span = find_json_object_span(text, top_key)
+    if span is None:
+        next_text = text.rstrip()[:-1].rstrip() + f',\n  "{top_key}": {{\n  }}\n}}\n' if text.strip().endswith("}") else text
+        span = find_json_object_span(next_text, top_key)
+        if span is None:
+            raise RuntimeError(f"Could not safely locate or create {top_key} in {path}")
+    else:
+        next_text = text
+    if SERVER_NAME in next_text and replace:
+        removed = remove_json_object_property(next_text, span, SERVER_NAME)
+        if removed is not None:
+            next_text = removed
+            span = find_json_object_span(next_text, top_key)
+    if dry_run:
+        return f"would merge MCP config for zed into {path}"
+    next_text = insert_json_object_property(next_text, span, SERVER_NAME, desired)
+    backup(path)
+    path.write_text(next_text, encoding="utf-8")
+    return "merged MCP config for zed"
+
+
+def remove_zed_config(env_file: Path, dry_run: bool) -> str:
+    path, top_key = JSON_TARGETS["zed"]
+    if not path.exists():
+        return "MCP config for zed was not installed"
+    text = path.read_text(encoding="utf-8")
+    if SERVER_NAME not in text:
+        return "MCP config for zed was not installed"
+    managed_markers = [
+        str(env_file),
+        "PAPER_SEARCH_MCP_ENV_FILE",
+        "paper_search_mcp.server",
+    ]
+    if not all(marker in text for marker in managed_markers):
+        return "skipped non-managed MCP config for zed"
+    span = find_json_object_span(text, top_key)
+    if span is None:
+        return "skipped non-managed MCP config for zed"
+    next_text = remove_json_object_property(text, span, SERVER_NAME)
+    if next_text is None:
+        return "skipped non-managed MCP config for zed"
+    if dry_run:
+        return f"would remove MCP config for zed from {path}"
+    backup(path)
+    path.write_text(next_text, encoding="utf-8")
+    return "removed MCP config for zed"
+
+
+def merge_claude_config(env_file: Path, dry_run: bool, replace: bool) -> str:
+    desired = json_server("claude", env_file)
+    if CLAUDE_MCP_PATH.exists():
+        try:
+            existing = json.loads(CLAUDE_MCP_PATH.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            existing = None
+        if existing == desired:
+            return "Claude MCP already configured"
+        if not replace:
+            return "adopted existing Claude MCP config; rerun with --replace-mcp to manage it"
+    if dry_run:
+        return f"would write Claude MCP config to {CLAUDE_MCP_PATH}"
+    CLAUDE_MCP_DIR.mkdir(parents=True, exist_ok=True)
+    if CLAUDE_MCP_PATH.exists():
+        backup(CLAUDE_MCP_PATH)
+    CLAUDE_MCP_PATH.write_text(json.dumps(desired, indent=2) + "\n", encoding="utf-8")
+    return "merged MCP config for claude"
 
 
 def codex_block(env_file: Path) -> str:
@@ -591,13 +722,17 @@ def install_all(
             results.append(f"would create env template at {env_file}")
     elif ensure_env_template(env_file):
         results.append(f"created env template at {env_file}")
+    if skill_agents:
+        results.append(ensure_agents_home(ars_source, dry_run, replace_skills))
     for agent in skill_agents:
         results.append(install_skill(agent, ars_source, replace_skills, dry_run))
     for agent in mcp_agents:
         if agent == "claude":
-            results.append(f"run manually for claude: {claude_command(env_file)}")
+            results.append(merge_claude_config(env_file, dry_run, replace_mcp))
         elif agent == "codex":
             results.append(merge_codex_config(env_file, dry_run, replace_mcp))
+        elif agent == "zed":
+            results.append(merge_zed_config(env_file, dry_run, replace_mcp))
         else:
             results.append(merge_json_config(agent, env_file, dry_run, replace_mcp))
     if not dry_run:
@@ -615,19 +750,26 @@ def install_all(
 
 
 def verify_skill(agent: str, ars_source: Path | None) -> tuple[bool, str]:
+    if agent == "zed":
+        return is_canonical_skill_ready(ars_source)
     target = SKILL_TARGETS[agent]
-    skill_file = target / "SKILL.md"
-    link = target / "ars"
-    if not target.exists() or not skill_file.exists() or not link.is_symlink():
-        return False, "missing skill directory, SKILL.md, or ars symlink"
-    if ars_source and link.resolve() != ars_source:
-        return False, f"ars symlink points to {link.resolve()} instead of {ars_source}"
-    return True, "skill adapter installed"
+    if not target.is_symlink():
+        return False, f"missing skill symlink at {target}"
+    if target.resolve() != CANONICAL_SKILL_DIR:
+        return False, f"skill symlink points to {target.resolve()} instead of {CANONICAL_SKILL_DIR}"
+    ok, detail = is_canonical_skill_ready(ars_source)
+    return (ok, f"skill symlink installed; {detail}")
 
 
 def verify_mcp(agent: str) -> tuple[bool, str]:
     if agent == "claude":
-        return True, "Claude must be verified by running the printed claude mcp add-json command"
+        if not CLAUDE_MCP_PATH.exists():
+            return False, f"missing {CLAUDE_MCP_PATH}"
+        try:
+            json.loads(CLAUDE_MCP_PATH.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            return False, "invalid JSON"
+        return True, "Claude MCP config present"
     if agent == "codex":
         path = Path.home() / ".codex" / "config.toml"
         if not path.exists():
@@ -649,6 +791,10 @@ def verify_mcp(agent: str) -> tuple[bool, str]:
 
 def is_managed_skill(agent: str) -> bool:
     target = SKILL_TARGETS[agent]
+    if agent == "zed":
+        return is_canonical_skill_ready()[0]
+    if target.is_symlink():
+        return target.resolve() == CANONICAL_SKILL_DIR
     skill_file = target / "SKILL.md"
     if agent not in SKILL_TEMPLATES or not skill_file.exists():
         return False
@@ -661,6 +807,8 @@ def is_managed_skill(agent: str) -> bool:
 
 def uninstall_skill(agent: str, dry_run: bool) -> str:
     target = SKILL_TARGETS[agent]
+    if agent == "zed":
+        return "Zed uses the shared global .agents skill; it is removed after agent symlinks"
     if not target.exists() and not target.is_symlink():
         return f"skill adapter for {agent} was not installed"
     if not is_managed_skill(agent):
@@ -674,15 +822,36 @@ def uninstall_skill(agent: str, dry_run: bool) -> str:
     return f"removed skill adapter for {agent}"
 
 
+def remove_agents_home(dry_run: bool) -> str:
+    if not CANONICAL_SKILL_DIR.exists() and not CANONICAL_SKILL_DIR.is_symlink():
+        return "global .agents skill was not installed"
+    if not is_canonical_skill_ready()[0]:
+        return f"skipped non-managed global .agents skill at {CANONICAL_SKILL_DIR}"
+    if dry_run:
+        return f"would remove global .agents skill at {CANONICAL_SKILL_DIR}"
+    shutil.rmtree(CANONICAL_SKILL_DIR)
+    if AGENTS_GLOBAL_FILE.exists():
+        begin = "<!-- BEGIN academic-agent-toolkit -->"
+        end = "<!-- END academic-agent-toolkit -->"
+        current = AGENTS_GLOBAL_FILE.read_text(encoding="utf-8")
+        if begin in current and end in current:
+            before, rest = current.split(begin, 1)
+            _, after = rest.split(end, 1)
+            next_text = (before.rstrip() + "\n\n" + after.lstrip("\n")).strip() + "\n"
+            if next_text.strip():
+                AGENTS_GLOBAL_FILE.write_text(next_text, encoding="utf-8")
+            else:
+                AGENTS_GLOBAL_FILE.unlink()
+    return f"removed global .agents skill at {CANONICAL_SKILL_DIR}"
+
+
 def remove_json_config(agent: str, env_file: Path, dry_run: bool) -> str:
     path, top_key = JSON_TARGETS[agent]
     if not path.exists():
         return f"MCP config for {agent} was not installed"
     try:
-        data = load_json(path)
+        data = load_json_or_jsonc(path) if agent == "zed" else load_json(path)
     except json.JSONDecodeError as exc:
-        if agent == "zed" and SERVER_NAME in path.read_text(encoding="utf-8"):
-            return f"skipped zed MCP removal because settings.json is JSONC: {exc}"
         return f"MCP config for {agent} was not installed"
     servers = data.get(top_key, {})
     if SERVER_NAME not in servers:
@@ -730,11 +899,22 @@ def uninstall_all(
     for agent in skill_agents:
         if agent in SKILL_TARGETS:
             results.append(uninstall_skill(agent, dry_run))
+    results.append(remove_agents_home(dry_run))
     for agent in mcp_agents:
         if agent == "claude":
-            results.append("remove Claude MCP manually with: claude mcp remove paper-search-mcp --scope user")
+            if CLAUDE_MCP_PATH.exists():
+                if dry_run:
+                    results.append(f"would remove Claude MCP config from {CLAUDE_MCP_PATH}")
+                else:
+                    backup(CLAUDE_MCP_PATH)
+                    CLAUDE_MCP_PATH.unlink()
+                    results.append(f"removed Claude MCP config")
+            else:
+                results.append("Claude MCP config was not installed")
         elif agent == "codex":
             results.append(remove_codex_config(dry_run))
+        elif agent == "zed":
+            results.append(remove_zed_config(env_file, dry_run))
         elif agent in JSON_TARGETS:
             results.append(remove_json_config(agent, env_file, dry_run))
     if remove_env and env_file.exists():

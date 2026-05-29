@@ -12,6 +12,7 @@ from rich.table import Table
 from academic_agent_toolkit.branding import SHORT_NAME
 from academic_agent_toolkit.config import DEFAULT_ENV_FILE, load_config, save_config
 from academic_agent_toolkit.installer import ensure_env_template
+from academic_agent_toolkit.theme import Colors
 from academic_agent_toolkit.ui import console
 
 KEYS = [
@@ -120,14 +121,14 @@ def _write_env(path: Path, values: dict[str, str]) -> None:
 
 
 def show_keys_table() -> Table:
-    table = Table(title="Paper Search MCP - API Keys", box=box.ROUNDED, header_style="bold cyan", border_style="blue")
-    table.add_column("Variable", style="white")
+    table = Table(title="Paper Search MCP - API Keys", box=box.ROUNDED, header_style=f"bold {Colors.PRIMARY}", border_style=Colors.BORDER)
+    table.add_column("Variable", style=Colors.TEXT)
     table.add_column("Required?", width=9)
     table.add_column("Recommended?", width=12)
     table.add_column("Description")
     for spec in KEYS:
-        required = "[bold red]yes[/bold red]" if spec["required"] else "optional"
-        recommended = "[bold green]yes[/bold green]" if spec.get("recommended") else "optional"
+        required = f"[bold {Colors.ERROR}]yes[/bold {Colors.ERROR}]" if spec["required"] else "optional"
+        recommended = f"[bold {Colors.SUCCESS}]yes[/bold {Colors.SUCCESS}]" if spec.get("recommended") else "optional"
         table.add_row(spec["key"], required, recommended, spec["description"])
     return table
 
@@ -135,14 +136,14 @@ def show_keys_table() -> Table:
 def configure_keys(env_file: Path, *, dry_run: bool = False) -> None:
     console.print(show_keys_table())
     if dry_run:
-        console.print(Panel.fit("[yellow]Dry-run: would walk through each key interactively.[/yellow]", border_style="yellow"))
+        console.print(Panel.fit(f"[{Colors.WARNING}]Dry-run: would walk through each key interactively.[/]", border_style=Colors.WARNING))
         return
     if not env_file.exists():
         ensure_env_template(env_file)
     console.print(
         Panel.fit(
-            "[white]Press Enter to skip an optional key. Required keys will prompt until valid.[/white]\nLeave the field empty to keep the current value (shown in brackets).",
-            border_style="cyan",
+            f"[{Colors.TEXT}]Press Enter to skip an optional key. Required keys will prompt until valid.[/]\nLeave the field empty to keep the current value (shown in brackets).",
+            border_style=Colors.BORDER_ACTIVE,
         )
     )
 
@@ -153,25 +154,25 @@ def configure_keys(env_file: Path, *, dry_run: bool = False) -> None:
         key = spec["key"]
         current = existing.get(key, "")
         is_required = spec["required"]
-        label = f"[bold red]REQUIRED[/bold red]" if is_required else "optional"
+        label = f"[bold {Colors.ERROR}]REQUIRED[/bold {Colors.ERROR}]" if is_required else "optional"
 
-        console.print(f"\n[bold white]{key}[/bold white] ({label})")
-        console.print(f"[dim]{spec['description']}[/dim]")
-        console.print(f"[dim]Get it: {spec['how_to_get']}[/dim]")
+        console.print(f"\n[bold {Colors.TEXT}]{key}[/bold {Colors.TEXT}] ({label})")
+        console.print(f"[dim {Colors.TEXT_SECONDARY}]{spec['description']}[/]")
+        console.print(f"[dim {Colors.TEXT_SECONDARY}]Get it: {spec['how_to_get']}[/]")
 
         while True:
             prompt_text = f"Value [{current or 'empty'}]: "
             value = typer.prompt(prompt_text, default="", show_default=False)
             if not value.strip():
                 if is_required and not current:
-                    console.print("[red]This key is required. Please provide a value.[/red]")
+                    console.print(f"[{Colors.ERROR}]This key is required. Please provide a value.[/]")
                     continue
                 break
             validator = _VALIDATORS.get(spec.get("validation") or "")
             if validator:
                 ok, msg = validator(value)
                 if not ok:
-                    console.print(f"[red]{msg}[/red]")
+                    console.print(f"[{Colors.ERROR}]{msg}[/]")
                     if is_required:
                         continue
                     break
@@ -179,18 +180,18 @@ def configure_keys(env_file: Path, *, dry_run: bool = False) -> None:
             break
 
     if not new_values:
-        console.print("[yellow]No new keys were entered. Env file unchanged.[/yellow]")
+        console.print(f"[{Colors.WARNING}]No new keys were entered. Env file unchanged.[/]")
         return
 
     if dry_run:
-        console.print(f"\n[green]Would write {len(new_values)} key(s) to {env_file}[/green]")
+        console.print(f"\n[{Colors.SUCCESS}]Would write {len(new_values)} key(s) to {env_file}[/]")
         for key, value in sorted(new_values.items()):
             masked = value[:4] + "****" if len(value) > 4 else "****"
-            console.print(f"  [dim]{key}={masked}[/dim]")
+            console.print(f"  [dim {Colors.TEXT_SECONDARY}]{key}={masked}[/]")
         return
 
     _write_env(env_file, new_values)
-    console.print(f"[green]Wrote {len(new_values)} key(s) to {env_file}[/green]")
+    console.print(f"[{Colors.SUCCESS}]Wrote {len(new_values)} key(s) to {env_file}[/]")
     config = load_config()
     config.env_file = str(env_file)
     save_config(config)
@@ -211,12 +212,12 @@ def register_key_command(app: typer.Typer) -> None:
         path = Path(env_file).expanduser().resolve()
         console.print(
             Panel.fit(
-                f"[bold white]{SHORT_NAME} setup-keys[/bold white]\nInteractive credential setup for Paper Search MCP.",
-                border_style="bright_blue",
+                f"[bold {Colors.TEXT}]{SHORT_NAME} setup-keys[/bold {Colors.TEXT}]\nInteractive credential setup for Paper Search MCP.",
+                border_style=Colors.BORDER_ACTIVE,
             )
         )
         configure_keys(path, dry_run=dry_run)
         console.print(
-            f"\n[bold green]Done.[/bold green] Keys are stored in [white]{path}[/white].\n"
-            f"Paper Search MCP reads them via [white]PAPER_SEARCH_MCP_ENV_FILE[/white] automatically."
+            f"\n[bold {Colors.SUCCESS}]Done.[/bold {Colors.SUCCESS}] Keys are stored in [{Colors.TEXT}]{path}[/].\n"
+            f"Paper Search MCP reads them via [{Colors.TEXT}]PAPER_SEARCH_MCP_ENV_FILE[/] automatically."
         )
