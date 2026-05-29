@@ -22,21 +22,31 @@ All configured across every supported agent in one command. No manual JSON/TOML 
 
 ## Installation
 
-**Prerequisites:** Python 3.11+, [uv](https://docs.astral.sh/uv/getting-started/installation/).
+**Prerequisites:** Python 3.11+ and [uv](https://docs.astral.sh/uv/getting-started/installation/).
+
+If you are not a Python developer, use the `uvx` option. It runs the latest published version from PyPI without making you manage a virtual environment.
 
 Pick one:
 
 ```bash
-# No install — run directly (always latest from PyPI)
+# Recommended: run directly from PyPI, no permanent install
 uvx academic-agent-toolkit doctor
 
-# Persistent install (stays in your PATH)
+# Persistent install: keeps the `aat` command available in your terminal
 uv tool install academic-agent-toolkit
 aat doctor
 
-# Standard pip
+# Standard pip install
 pip install academic-agent-toolkit
 aat doctor
+```
+
+After install, run:
+
+```bash
+aat install
+aat setup-keys
+aat verify
 ```
 
 ## Quick Start
@@ -167,6 +177,47 @@ AAT is an integration layer. It bundles and configures these upstream projects w
 - [academic-research-skills](https://github.com/Imbad0202/academic-research-skills) by Imbad0202
 - [experiment-agent](https://github.com/Imbad0202/experiment-agent) by Imbad0202
 - [paper-search-mcp](https://github.com/openags/paper-search-mcp) by openags
+
+---
+
+## Developer testing
+
+Use two separate environments when developing AAT:
+
+| Environment | Purpose | Command source |
+|---|---|---|
+| Local / sandbox | Test your current code before publishing | This checkout on your machine |
+| Production | Test what real users get from PyPI | Published `academic-agent-toolkit` package |
+
+### Local sandbox
+
+From the repository root:
+
+```bash
+# Run the CLI from your local source tree
+uv run aat doctor
+uv run aat install --dry-run --yes
+uv run aat verify
+```
+
+Use this before publishing. It tests the code you are editing locally, even if it is not on PyPI yet.
+
+### Production check from PyPI
+
+Use this after publishing a release:
+
+```bash
+# Run the latest published version from PyPI
+uvx academic-agent-toolkit doctor
+
+# Or install it persistently like a real user would
+uv tool install --force academic-agent-toolkit
+aat doctor
+aat install --dry-run --yes
+aat verify
+```
+
+Use this to confirm that PyPI users receive the expected version and behavior.
 
 ---
 
